@@ -102,10 +102,9 @@ export class TableStorageStream implements ILogStream {
         };
 
         this.transform = (function () {
+            return function (sourceObject:any, entGen:any):any {
+                var output:any = {};
 
-            var output:any = {};
-
-            return function (obj:any, entGen:any):any {
                 var transformRecursive = tco(function (obj:any, transformPrefix:string) {
                     for (var prop in obj) {
                         var value = obj[prop];
@@ -127,7 +126,7 @@ export class TableStorageStream implements ILogStream {
 
                 });
 
-                (<any>transformRecursive)(obj, "");
+                (<any>transformRecursive)(sourceObject, "");
 
                 return output;
             };
