@@ -3,7 +3,11 @@ az-bunyan
 
 az-bunyan provides azure storage streams for bunyan logger.
 
+## Install az-bunyan
 
+```
+npm install az-bunyan --save
+```
 
 ## Features
 
