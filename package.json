@@ -1,10 +1,12 @@
 {
   "name": "az-bunyan",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "description": "azure streams for bunyan",
-  "main": "index.js",
+  "main": "./lib/az-bunyan/index",
+  "typings": "./lib/az-bunyan/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepublish": "tsc -d"
   },
   "repository": {
     "type": "git",
@@ -19,7 +21,7 @@
   "directories": {
     "lib": "./lib/az-bunyan"
   },
-  "engines":{
+  "engines": {
     "node": "*"
   },
   "author": "Cyprien Autexier",
@@ -27,18 +29,17 @@
   "bugs": {
     "url": "https://github.com/sandorfr/az-bunyan/issues"
   },
-  "main": "./lib/az-bunyan/index",
   "homepage": "https://github.com/sandorfr/az-bunyan",
   "dependencies": {
-    "azure-storage": "^0.3.3",
-    "handlebars": "^2.0.0",
-    "moment": "^2.8.3",
-    "node-uuid": "^1.4.1"
+    "azure-storage": "^2.5.0",
+    "handlebars": "^4.0.10",
+    "moment": "^2.18.1",
+    "node-uuid": "^1.4.1",
+    "uuid": "^3.1.0"
   },
   "devDependencies": {
-    "grunt": "^0.4.5",
-    "grunt-ts": "^1.12.1",
-    "grunt-tslint": "^0.4.4",
-    "grunt-typescript-export": "^0.1.0"
+    "@types/handlebars": "^4.0.36",
+    "@types/uuid": "^3.4.2",
+    "typescript": "^2.5.2"
   }
 }

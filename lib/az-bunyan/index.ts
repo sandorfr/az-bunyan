@@ -1,29 +1,19 @@
 /**
  * Created by Cyprien on 26/10/2014.
  */
-///<reference path="../../typings/tsd.d.ts" />
-
-var azure = require("azure-storage");
+import azure = require("azure-storage");
 import handlebars = require("handlebars");
 import moment = require("moment");
-import uuid = require("node-uuid");
+import uuid = require("uuid");
 
-handlebars.registerHelper("substring", function (str:string, startIndex:number, count:number):string {
-    return str.substring(startIndex, count);
-});
+handlebars.registerHelper("substring", (str: string, startIndex: number, count: number): string => str.substring(startIndex, count));
+handlebars.registerHelper("momentFormat", (date: Date, format: string) => moment(date).format(format));
+handlebars.registerHelper("newId", () => uuid.v4());
 
-handlebars.registerHelper("momentFormat", function (date:Date, format:string) {
-    return moment(date).format(format);
-});
-
-handlebars.registerHelper("newId", function () {
-    return uuid.v4();
-});
-
-function tco(f) {
-    var value;
-    var active = false;
-    var accumulated = [];
+function tco(f: Function): Function {
+    let value: any;
+    let active = false;
+    let accumulated: IArguments[] = [];
 
     return function accumulator() {
         accumulated.push(arguments);
@@ -49,38 +39,37 @@ export interface ILogStreamDeclaration {
 }
 
 export interface ILogStream {
-    write(obj:any): void;
+    write(obj: any): void;
     close(): void;
 }
 
-export interface  IAzureStorageAccount {
-    accountName:string;
-    accessKey:string;
-    host?:string;
+export interface IAzureStorageAccount {
+    accountName: string;
+    accessKey: string;
+    host: string;
 }
 
 export interface IAzureOptions {
-    connectionString? : string;
+    connectionString?: string;
     storageAccountSettings?: IAzureStorageAccount;
-    tableName : string;
-    partitionKeyFormat? : string;
+    tableName: string;
+    partitionKeyFormat?: string;
     rowKeyFormat?: string;
 }
 
 export class TableStorageStream implements ILogStream {
-    private client:any;
-    private tableName:string;
-    private partitionKeyBuilder:HandlebarsTemplateDelegate;
-    private rowKeyBuilder:HandlebarsTemplateDelegate;
-    private transform:TransformFunction;
+    private client: azure.TableService;
+    private tableName: string;
+    private partitionKeyBuilder: HandlebarsTemplateDelegate;
+    private rowKeyBuilder: HandlebarsTemplateDelegate;
 
-    constructor(options:IAzureOptions) {
+    constructor(options: IAzureOptions) {
         if (options.connectionString) {
             this.client = azure.createTableService(options.connectionString);
         } else if (options.storageAccountSettings) {
-            this.client = azure.createTableService(options.storageAccountSettings.accountName, options.storageAccountSettings.accessKey, options.storageAccountSettings.host)
+            this.client = azure.createTableService(options.storageAccountSettings.accountName, options.storageAccountSettings.accessKey, { primaryHost: options.storageAccountSettings.host });
         } else {
-            throw new Error("Missing either a connection string or storage account settings")
+            throw new Error("Missing either a connection string or storage account settings");
         }
         this.tableName = options.tableName;
 
@@ -93,55 +82,16 @@ export class TableStorageStream implements ILogStream {
             options.rowKeyFormat = '{{newId}}'
         }
 
-        var sanitize = (name:string):any=> {
-            if (name) {
-                return name.replace(/[^\w]/g, "");
-            } else {
-                return "empty";
-            }
-        };
-
-        this.transform = (function () {
-            return function (sourceObject:any, entGen:any):any {
-                var output:any = {};
-
-                var transformRecursive = tco(function (obj:any, transformPrefix:string) {
-                    for (var prop in obj) {
-                        var value = obj[prop];
-                        var type = typeof(obj[prop]);
-                        var fullName = transformPrefix + sanitize(prop);
-
-                        if (type === 'object') {
-                            if (obj[prop] instanceof Date) {
-                                output[fullName] = entGen.String((<Date>value).toJSON());
-                            } else {
-                                (<any>transformRecursive)(obj[prop], fullName);
-                            }
-                        } else if (type === 'number') {
-                            output[fullName] = entGen.Double((<Number>value));
-                        } else if (type === 'string') {
-                            output[fullName] = entGen.String((<String>value));
-                        }
-                    }
-
-                });
-
-                (<any>transformRecursive)(sourceObject, "");
-
-                return output;
-            };
-        })();
-
         this.rowKeyBuilder = handlebars.compile(options.rowKeyFormat);
     }
 
-    write(obj:any):void {
-        var entGen = azure.TableUtilities.entityGenerator;
-        var entity = this.transform(obj, entGen);
+    write(obj: any): void {
+        const entGen = azure.TableUtilities.entityGenerator;
+        const entity = this.transform(obj, entGen);
         entity.RowKey = entGen.String(this.rowKeyBuilder(obj));
         entity.PartitionKey = entGen.String(this.partitionKeyBuilder(obj));
 
-        this.client.insertEntity(this.tableName, entity, function (error, result, response) {
+        this.client.insertEntity(this.tableName, entity, (error, result, response) => {
             if (error) {
                 console.log(error);
             } else {
@@ -150,14 +100,46 @@ export class TableStorageStream implements ILogStream {
 
     }
 
-    close():void {
+    close(): void {
     }
+
+    private sanitize(name: string): string {
+        if (name) {
+            return name.replace(/[^\w]/g, "");
+        } else {
+            return "empty";
+        }
+    }
+
+    private transform(sourceObject: { [key: string]: any }, entGen: typeof azure.TableUtilities.entityGenerator): { [key: string]: any } {
+        const output: { [key: string]: any } = {};
+
+        const transformRecursive = tco((obj: { [key: string]: any }, transformPrefix: string) => {
+            for (let prop in obj) {
+                var value = obj[prop];
+                var type = typeof obj[prop];
+                var fullName = transformPrefix + this.sanitize(prop);
+
+                if (type === 'object') {
+                    if (obj[prop] instanceof Date) {
+                        output[fullName] = entGen.String((<Date>value).toJSON());
+                    } else {
+                        transformRecursive(obj[prop], fullName);
+                    }
+                } else if (type === 'number') {
+                    output[fullName] = entGen.Double((<number>value));
+                } else if (type === 'string') {
+                    output[fullName] = entGen.String((<string>value));
+                }
+            }
+        });
+
+        transformRecursive(sourceObject, "");
+
+        return output;
+    };
 }
 
-export function createTableStorageStream(level:string, options:IAzureOptions):ILogStreamDeclaration {
-    return {level: "info", stream: new TableStorageStream(options), type: "raw"};
-}
-
-export interface TransformFunction {
-    (obj:any, entGen:any): any;
+export function createTableStorageStream(level: string, options: IAzureOptions): ILogStreamDeclaration {
+    return { level: "info", stream: new TableStorageStream(options), type: "raw" };
 }

@@ -1,4 +1,3 @@
-/// <reference path="../../typings/tsd.d.ts" />
 export interface ILogStreamDeclaration {
     level: string;
     stream: ILogStream;
@@ -11,7 +10,7 @@ export interface ILogStream {
 export interface IAzureStorageAccount {
     accountName: string;
     accessKey: string;
-    host?: string;
+    host: string;
 }
 export interface IAzureOptions {
     connectionString?: string;
@@ -25,12 +24,10 @@ export declare class TableStorageStream implements ILogStream {
     private tableName;
     private partitionKeyBuilder;
     private rowKeyBuilder;
-    private transform;
     constructor(options: IAzureOptions);
     write(obj: any): void;
     close(): void;
+    private sanitize(name);
+    private transform(sourceObject, entGen);
 }
 export declare function createTableStorageStream(level: string, options: IAzureOptions): ILogStreamDeclaration;
-export interface TransformFunction {
-    (obj: any, entGen: any): any;
-}
