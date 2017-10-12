@@ -17,15 +17,15 @@ npm install az-bunyan --save
 
 1. Create the stream
 
-```
+```js
 // define the target azure storage table name
-var tableName = 'destinationTableName';
+const tableName = 'destinationTableName';
 
 // define the connection string to your azure storage account
-var connectionString = 'DefaultEndpointsProtocol=https;AccountName=storageAccountName;AccountKey=storageAccoutnKey;'
+const connectionString = 'DefaultEndpointsProtocol=https;AccountName=storageAccountName;AccountKey=storageAccoutnKey;'
 
 // initialize the az-bunyan table storage stream
-var azureStream = azBunyan.createTableStorageStream('warning', {
+const azureStream = azBunyan.createTableStorageStream('warning', {
     connectionString: connectionString,
     tableName: tableName
 });
@@ -33,8 +33,8 @@ var azureStream = azBunyan.createTableStorageStream('warning', {
 
 2. Add the stream to your bunyan logger
 
-```
-var logger = bunyan.createLogger({
+```js
+const logger = bunyan.createLogger({
     name: "yourLoggerName",
     streams: [
         azureStream
@@ -53,8 +53,8 @@ it comes to that kind of point. So when you create your stream you can give cust
 
 The templates are compiled with handlerbars so you should follow [handlebars syntax](http://handlebarsjs.com/).
 
-```
-var azureStream = azBunyan.createTableStorageStream('warning', {
+```js
+const azureStream = azBunyan.createTableStorageStream('warning', {
     connectionString: connectionString,
     tableName: tableName
     partitionKeyFormat: "{{name}}_{{momentFormat time "YYYY-MM-DD"}}"

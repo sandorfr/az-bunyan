@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "lib": ["es2015"],
+        "module": "commonjs",
+        "noImplicitThis": false,
+        "outDir": "lib/az-bunyan",
+        "removeComments": true,
+        "target": "es5",
+        "sourceMap": true,
+        "strict": true
+    },
+    "files": [
+        "lib/az-bunyan/index.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
