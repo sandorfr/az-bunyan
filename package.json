@@ -6,7 +6,7 @@
   "typings": "./lib/az-bunyan/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepublish": "tsc -d"
+    "build": "tsc -d"
   },
   "repository": {
     "type": "git",
