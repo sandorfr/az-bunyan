@@ -141,5 +141,5 @@ export class TableStorageStream implements ILogStream {
 }
 
 export function createTableStorageStream(level: string, options: IAzureOptions): ILogStreamDeclaration {
-    return { level: "info", stream: new TableStorageStream(options), type: "raw" };
+    return { level: level, stream: new TableStorageStream(options), type: "raw" };
 }
