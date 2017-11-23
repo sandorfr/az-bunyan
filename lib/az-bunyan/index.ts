@@ -1,145 +1,165 @@
 /**
  * Created by Cyprien on 26/10/2014.
  */
-import azure = require("azure-storage");
-import handlebars = require("handlebars");
-import moment = require("moment");
-import uuid = require("uuid");
+import azure = require('azure-storage');
+import handlebars = require('handlebars');
+import moment = require('moment');
+import uuid = require('uuid');
+import { date, TableUtilities, common, TableQuery, TableService, TableBatch } from 'azure-storage';
+import { TableStorageLogRotation, IAzurTableStorageLogRotation } from './rotation';
 
-handlebars.registerHelper("substring", (str: string, startIndex: number, count: number): string => str.substring(startIndex, count));
-handlebars.registerHelper("momentFormat", (date: Date, format: string) => moment(date).format(format));
-handlebars.registerHelper("newId", () => uuid.v4());
+handlebars.registerHelper('substring', (str: string, startIndex: number, count: number): string =>
+	str.substring(startIndex, count)
+);
+handlebars.registerHelper('momentFormat', (date: Date, format: string) => moment(date).format(format));
+handlebars.registerHelper('newId', () => uuid.v4());
 
 function tco(f: Function): Function {
-    let value: any;
-    let active = false;
-    let accumulated: IArguments[] = [];
+	let value: any;
+	let active = false;
+	let accumulated: IArguments[] = [];
 
-    return function accumulator() {
-        accumulated.push(arguments);
+	return function accumulator() {
+		accumulated.push(arguments);
 
-        if (!active) {
-            active = true;
+		if (!active) {
+			active = true;
 
-            while (accumulated.length) {
-                value = f.apply(this, accumulated.shift());
-            }
+			while (accumulated.length) {
+				value = f.apply(this, accumulated.shift());
+			}
 
-            active = false;
+			active = false;
 
-            return value;
-        }
-    }
+			return value;
+		}
+	};
 }
 
 export interface ILogStreamDeclaration {
-    level: string;
-    stream: ILogStream;
-    type?: string;
+	level: string;
+	stream: ILogStream;
+	type?: string;
 }
 
 export interface ILogStream {
-    write(obj: any): void;
-    close(): void;
+	write(obj: any): void;
+	close(): void;
 }
 
 export interface IAzureStorageAccount {
-    accountName: string;
-    accessKey: string;
-    host: string;
+	accountName: string;
+	accessKey: string;
+	host: string;
 }
 
 export interface IAzureOptions {
-    connectionString?: string;
-    storageAccountSettings?: IAzureStorageAccount;
-    tableName: string;
-    partitionKeyFormat?: string;
-    rowKeyFormat?: string;
+	connectionString?: string;
+	storageAccountSettings?: IAzureStorageAccount;
+	tableName: string;
+	partitionKeyFormat?: string;
+	rowKeyFormat?: string;
+	logRotationOptions?: IAzurTableStorageLogRotation;
 }
 
 export class TableStorageStream implements ILogStream {
-    private client: azure.TableService;
-    private tableName: string;
-    private partitionKeyBuilder: HandlebarsTemplateDelegate;
-    private rowKeyBuilder: HandlebarsTemplateDelegate;
+	private client: azure.TableService;
+	private tableName: string;
+	private partitionKeyBuilder: HandlebarsTemplateDelegate;
+	private rowKeyBuilder: HandlebarsTemplateDelegate;
 
-    constructor(options: IAzureOptions) {
-        if (options.connectionString) {
-            this.client = azure.createTableService(options.connectionString);
-        } else if (options.storageAccountSettings) {
-            this.client = azure.createTableService(options.storageAccountSettings.accountName, options.storageAccountSettings.accessKey, { primaryHost: options.storageAccountSettings.host });
-        } else {
-            throw new Error("Missing either a connection string or storage account settings");
-        }
-        this.tableName = options.tableName;
+	constructor(options: IAzureOptions) {
+		if (options.connectionString) {
+			this.client = azure.createTableService(options.connectionString);
+		} else if (options.storageAccountSettings) {
+			this.client = azure.createTableService(
+				options.storageAccountSettings.accountName,
+				options.storageAccountSettings.accessKey,
+				{ primaryHost: options.storageAccountSettings.host }
+			);
+		} else {
+			throw new Error('Missing either a connection string or storage account settings');
+		}
+		this.tableName = options.tableName;
 
-        if (!options.partitionKeyFormat) {
-            options.partitionKeyFormat = '{{name}}_{{momentFormat time "YYYY-MM-DD-HH"}}';
-        }
-        this.partitionKeyBuilder = handlebars.compile(options.partitionKeyFormat);
+		if (!options.partitionKeyFormat) {
+			options.partitionKeyFormat = '{{name}}_{{momentFormat time "YYYY-MM-DD-HH"}}';
+		}
+		this.partitionKeyBuilder = handlebars.compile(options.partitionKeyFormat);
 
-        if (!options.rowKeyFormat) {
-            options.rowKeyFormat = '{{newId}}'
-        }
+		if (!options.rowKeyFormat) {
+			options.rowKeyFormat = '{{newId}}';
+		}
 
-        this.rowKeyBuilder = handlebars.compile(options.rowKeyFormat);
-    }
+		this.rowKeyBuilder = handlebars.compile(options.rowKeyFormat);
 
-    write(obj: any): void {
-        const entGen = azure.TableUtilities.entityGenerator;
-        const entity = this.transform(obj, entGen);
-        entity.RowKey = entGen.String(this.rowKeyBuilder(obj));
-        entity.PartitionKey = entGen.String(this.partitionKeyBuilder(obj));
+		if (options.logRotationOptions) {
+			const { daysToKeep, cleanupIntervalHours } = options.logRotationOptions;
+			new TableStorageLogRotation({
+				daysToKeep,
+				cleanupIntervalHours,
+				tableService: this.client,
+				tableName: this.tableName
+			});
+		}
+	}
 
-        this.client.insertEntity(this.tableName, entity, (error, result, response) => {
-            if (error) {
-                console.log(error);
-            } else {
-            }
-        });
+	write(obj: any): void {
+		const entGen = azure.TableUtilities.entityGenerator;
+		const entity = this.transform(obj, entGen);
+		entity.RowKey = entGen.String(this.rowKeyBuilder(obj));
+		entity.PartitionKey = entGen.String(this.partitionKeyBuilder(obj));
 
-    }
+		this.client.insertEntity(this.tableName, entity, (error, result, response) => {
+			if (error) {
+				console.log(error);
+			} else {
+			}
+		});
+	}
 
-    close(): void {
-    }
+	close(): void {}
 
-    private sanitize(name: string): string {
-        if (name) {
-            return name.replace(/[^\w]/g, "");
-        } else {
-            return "empty";
-        }
-    }
+	private sanitize(name: string): string {
+		if (name) {
+			return name.replace(/[^\w]/g, '');
+		} else {
+			return 'empty';
+		}
+	}
 
-    private transform(sourceObject: { [key: string]: any }, entGen: typeof azure.TableUtilities.entityGenerator): { [key: string]: any } {
-        const output: { [key: string]: any } = {};
+	private transform(
+		sourceObject: { [key: string]: any },
+		entGen: typeof azure.TableUtilities.entityGenerator
+	): { [key: string]: any } {
+		const output: { [key: string]: any } = {};
 
-        const transformRecursive = tco((obj: { [key: string]: any }, transformPrefix: string) => {
-            for (let prop in obj) {
-                var value = obj[prop];
-                var type = typeof obj[prop];
-                var fullName = transformPrefix + this.sanitize(prop);
+		const transformRecursive = tco((obj: { [key: string]: any }, transformPrefix: string) => {
+			for (let prop in obj) {
+				var value = obj[prop];
+				var type = typeof obj[prop];
+				var fullName = transformPrefix + this.sanitize(prop);
 
-                if (type === 'object') {
-                    if (obj[prop] instanceof Date) {
-                        output[fullName] = entGen.String((<Date>value).toJSON());
-                    } else {
-                        transformRecursive(obj[prop], fullName);
-                    }
-                } else if (type === 'number') {
-                    output[fullName] = entGen.Double((<number>value));
-                } else if (type === 'string') {
-                    output[fullName] = entGen.String((<string>value));
-                }
-            }
-        });
+				if (type === 'object') {
+					if (obj[prop] instanceof Date) {
+						output[fullName] = entGen.String((<Date>value).toJSON());
+					} else {
+						transformRecursive(obj[prop], fullName);
+					}
+				} else if (type === 'number') {
+					output[fullName] = entGen.Double(<number>value);
+				} else if (type === 'string') {
+					output[fullName] = entGen.String(<string>value);
+				}
+			}
+		});
 
-        transformRecursive(sourceObject, "");
+		transformRecursive(sourceObject, '');
 
-        return output;
-    };
+		return output;
+	}
 }
 
 export function createTableStorageStream(level: string, options: IAzureOptions): ILogStreamDeclaration {
-    return { level: level, stream: new TableStorageStream(options), type: "raw" };
+	return { level: level, stream: new TableStorageStream(options), type: 'raw' };
 }

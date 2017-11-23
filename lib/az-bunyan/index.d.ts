@@ -1,3 +1,4 @@
+import { IAzurTableStorageLogRotation } from './rotation';
 export interface ILogStreamDeclaration {
     level: string;
     stream: ILogStream;
@@ -18,6 +19,7 @@ export interface IAzureOptions {
     tableName: string;
     partitionKeyFormat?: string;
     rowKeyFormat?: string;
+    logRotationOptions?: IAzurTableStorageLogRotation;
 }
 export declare class TableStorageStream implements ILogStream {
     private client;
